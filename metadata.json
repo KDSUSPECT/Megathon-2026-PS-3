@@ -1,0 +1,6 @@
+{
+  "name": "PharmaChain Compliance & Anti-Counterfeit Platform",
+  "description": "Comprehensive pharmaceutical reverse logistics, hash-chained ledger audit, anti-re-entry fraud detection, and role-based track and trace platform.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
