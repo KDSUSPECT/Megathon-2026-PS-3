@@ -122,6 +122,16 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onSuccess }) => {
     setLoginError(null);
   };
 
+  const handleDirectRoleLogin = (roleCard: QuickRoleCard) => {
+    setLoginUsername(roleCard.username);
+    setLoginLicense(roleCard.license);
+    setLoginPin(roleCard.pin);
+    const success = loginWithCredentials(roleCard.username, roleCard.pin);
+    if (success && onSuccess) {
+      onSuccess();
+    }
+  };
+
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
@@ -260,46 +270,87 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onSuccess }) => {
               </div>
 
               {/* QUICK LOGIN (5 TEST ROLES) */}
-              <div className="mb-5 p-3 rounded-xl bg-white border border-slate-200 shadow-xs">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold tracking-wider text-slate-500 uppercase">
-                    QUICK LOGIN (5 TEST ROLES)
+              <div className="mb-5 p-3.5 rounded-2xl bg-white border border-slate-200 shadow-xs">
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[10.5px] font-bold tracking-wider text-slate-700 uppercase">
+                    Select Authorized Role to Enter:
                   </span>
-                  <span className="text-[9.5px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
-                    CLICK TO AUTOFILL
+                  <span className="text-[9.5px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                    1-CLICK ENTER OR AUTOFILL
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {QUICK_ROLES.map((r) => {
                     const Icon = r.icon;
                     const isSelected = loginUsername === r.username;
                     return (
-                      <button
+                      <div
                         key={r.role}
-                        id={`quick-login-${r.role.toLowerCase()}`}
-                        type="button"
-                        onClick={() => handleQuickAutofill(r)}
-                        className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-all ${
+                        className={`p-2.5 rounded-xl border transition-all flex flex-col justify-between ${
                           isSelected
-                            ? 'bg-teal-100/80 border-teal-500 text-teal-950 ring-1 ring-teal-400'
-                            : r.color
+                            ? 'bg-teal-50/90 border-teal-500 ring-2 ring-teal-500/20 shadow-xs'
+                            : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/80'
                         }`}
                       >
-                        <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0 bg-white shadow-xs">
-                          <Icon className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-bold truncate leading-tight">
-                            {r.label.split(' / ')[0]}
+                        <div className="flex items-start gap-2 mb-2">
+                          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-white shadow-xs border border-slate-200">
+                            <Icon className="w-4 h-4 text-teal-700" />
                           </div>
-                          <div className="text-[9px] font-semibold text-slate-500 truncate uppercase">
-                            {r.role}
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[11.5px] font-bold text-slate-900 truncate leading-tight">
+                              {r.name.split(' (')[0]}
+                            </div>
+                            <div className="text-[9.5px] font-mono text-slate-500 truncate">
+                              {r.username}
+                            </div>
                           </div>
                         </div>
-                      </button>
+
+                        <div className="flex gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleDirectRoleLogin(r)}
+                            className="flex-1 py-1 px-2 rounded-lg bg-teal-800 hover:bg-teal-700 text-white text-[10px] font-bold transition-all text-center"
+                          >
+                            Enter &rarr;
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAutofill(r)}
+                            className="py-1 px-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-[10px] font-medium border border-slate-200 transition-all"
+                            title="Autofill credentials in form"
+                          >
+                            Fill
+                          </button>
+                        </div>
+                      </div>
                     );
                   })}
+                </div>
+
+                {/* Citizen Quick Check Banner */}
+                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span className="text-[11px] font-semibold text-slate-700">
+                      Public Citizen / Consumer Tablet Safety Check
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Log in as CDSCO regulator / public guest and go to public verify
+                      const regRole = QUICK_ROLES.find((r) => r.role === 'REGULATOR');
+                      if (regRole) {
+                        loginWithCredentials(regRole.username, regRole.pin);
+                      }
+                      if (onSuccess) onSuccess();
+                    }}
+                    className="text-[10.5px] font-bold text-teal-800 hover:text-teal-900 hover:underline flex items-center gap-1"
+                  >
+                    Verify Tablet Safety &rarr;
+                  </button>
                 </div>
               </div>
 

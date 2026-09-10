@@ -1,1 +1,48 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Eliminate default Recharts grey hover cursor rectangle */
+.recharts-tooltip-cursor {
+  fill: transparent !important;
+  stroke: transparent !important;
+}
+
+/* Ensure Recharts tooltip text is never black/illegible */
+.recharts-default-tooltip {
+  background-color: #071d18 !important;
+  border: 1px solid #0d9488 !important;
+  border-radius: 8px !important;
+  color: #ffffff !important;
+}
+
+.recharts-tooltip-label {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.recharts-tooltip-item,
+.recharts-tooltip-item-name,
+.recharts-tooltip-item-value,
+.recharts-tooltip-item-separator {
+  color: #2dd4bf !important;
+}
+
+/* Modal backdrop blur & full coverage across all viewports */
+.modal-backdrop-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100dvh !important;
+  z-index: 9999 !important;
+  background-color: rgba(3, 14, 11, 0.82) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+

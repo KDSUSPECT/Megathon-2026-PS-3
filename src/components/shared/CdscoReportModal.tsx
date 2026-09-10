@@ -1,6 +1,7 @@
 import React from 'react';
 import { usePharmaChain } from '../../context/PharmaChainContext';
 import { X, Printer, FileText, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { PortalModal } from './PortalModal';
 
 interface CdscoReportModalProps {
   onClose: () => void;
@@ -25,8 +26,12 @@ export const CdscoReportModal: React.FC<CdscoReportModalProps> = ({ onClose }) =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+    <PortalModal
+      id="cdsco-report-modal"
+      onClose={onClose}
+      className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]"
+    >
+      <div className="flex flex-col h-full overflow-hidden">
         {/* Modal Toolbar */}
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between no-print">
           <div className="flex items-center gap-2">
@@ -201,6 +206,6 @@ export const CdscoReportModal: React.FC<CdscoReportModalProps> = ({ onClose }) =
           </div>
         </div>
       </div>
-    </div>
+    </PortalModal>
   );
 };

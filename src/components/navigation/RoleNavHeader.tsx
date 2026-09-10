@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { usePharmaChain } from '../../context/PharmaChainContext';
+import { useTheme } from '../../context/ThemeContext';
 import { Role } from '../../types/pharmachain';
 import {
   ShieldCheck,
@@ -15,6 +16,8 @@ import {
   AlertCircle,
   LogIn,
   LogOut,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { SwitchTestingPersona } from './SwitchTestingPersona';
 import { SpringBootSpecModal } from '../shared/SpringBootSpecModal';
@@ -38,6 +41,8 @@ export const RoleNavHeader: React.FC<RoleNavHeaderProps> = ({
     setCurrentRole,
     logout,
   } = usePharmaChain();
+
+  const { theme, toggleTheme } = useTheme();
 
   const [isSpecModalOpen, setIsSpecModalOpen] = useState(false);
 
@@ -95,25 +100,25 @@ export const RoleNavHeader: React.FC<RoleNavHeaderProps> = ({
 
   return (
     <>
-      <header className="bg-[#071d18] border-b border-teal-900/60 text-white sticky top-0 z-40 shadow-xl" id="role-nav-header">
+      <header className="bg-white dark:bg-[#071d18] border-b border-slate-200 dark:border-teal-900/60 text-slate-900 dark:text-white sticky top-0 z-40 shadow-xs dark:shadow-xl transition-colors" id="role-nav-header">
         {/* Top utility row */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 border-b border-teal-900/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-teal-900/50">
           
           {/* Left Brand */}
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-teal-500/20 text-teal-300 flex items-center justify-center border border-teal-500/30 shadow-inner">
-              <ShieldCheck className="w-5 h-5 text-teal-300" />
+            <div className="w-8 h-8 rounded-lg bg-teal-50 dark:bg-teal-500/20 text-teal-700 dark:text-teal-300 flex items-center justify-center border border-teal-200 dark:border-teal-500/30 shadow-inner">
+              <ShieldCheck className="w-5 h-5 text-teal-700 dark:text-teal-300" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold tracking-tight text-white text-sm sm:text-base">
+                <span className="font-extrabold tracking-tight text-slate-900 dark:text-white text-sm sm:text-base">
                   PharmaChain Compliance
                 </span>
-                <span className="px-1.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-mono text-[9.5px] font-bold border border-teal-500/30">
+                <span className="px-1.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-500/20 text-teal-700 dark:text-teal-300 font-mono text-[9.5px] font-bold border border-teal-200 dark:border-teal-500/30">
                   v2025.1
                 </span>
               </div>
-              <p className="text-[10px] text-teal-200/70 hidden sm:block">
+              <p className="text-[10px] text-slate-500 dark:text-teal-200/70 hidden sm:block">
                 Reverse Supply Chain & Tamper-Evident Destruction Registry
               </p>
             </div>
@@ -129,10 +134,10 @@ export const RoleNavHeader: React.FC<RoleNavHeaderProps> = ({
                 setCurrentRole('RETAILER');
                 onSelectTab('RETAILER');
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-950/80 hover:bg-rose-900 text-rose-300 border border-rose-600/50 text-[11px] font-bold shadow-xs transition-colors group animate-pulse"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-950/80 dark:hover:bg-rose-900 dark:text-rose-300 dark:border-rose-600/50 text-[11px] font-bold shadow-xs transition-colors group animate-pulse"
               title="Click to view urgent expiring batch (Paracetamol 650mg ≤3d remaining)"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-400 group-hover:scale-125 transition-transform" />
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 group-hover:scale-125 transition-transform" />
               <span>1 Urgent (≤3d)</span>
             </button>
 
@@ -141,9 +146,9 @@ export const RoleNavHeader: React.FC<RoleNavHeaderProps> = ({
               id="top-scan-batch-btn"
               type="button"
               onClick={onOpenScanner}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-900/60 hover:bg-teal-800 text-teal-200 border border-teal-700/50 text-[11px] font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 dark:bg-teal-900/60 dark:hover:bg-teal-800 dark:text-teal-200 dark:border-teal-700/50 text-[11px] font-semibold transition-colors"
             >
-              <ScanLine className="w-3.5 h-3.5 text-teal-300" />
+              <ScanLine className="w-3.5 h-3.5 text-teal-700 dark:text-teal-300" />
               <span>Scan / OCR Batch</span>
             </button>
 
@@ -152,9 +157,9 @@ export const RoleNavHeader: React.FC<RoleNavHeaderProps> = ({
               id="top-spring-boot-spec-btn"
               type="button"
               onClick={() => setIsSpecModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-900/60 hover:bg-teal-800 text-teal-200 border border-teal-700/50 text-[11px] font-semibold transition-colors hidden md:flex"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-teal-900/60 dark:hover:bg-teal-800 dark:text-teal-200 dark:border-teal-700/50 text-[11px] font-semibold transition-colors hidden md:flex"
             >
-              <Code2 className="w-3.5 h-3.5 text-teal-300" />
+              <Code2 className="w-3.5 h-3.5 text-teal-700 dark:text-teal-300" />
               <span>Spring Boot Spec</span>
             </button>
 
@@ -163,15 +168,34 @@ export const RoleNavHeader: React.FC<RoleNavHeaderProps> = ({
               id="top-public-verify-btn"
               type="button"
               onClick={() => onSelectTab('PUBLIC_VERIFY')}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-900/60 hover:bg-teal-800 text-teal-200 border border-teal-700/50 text-[11px] font-semibold transition-colors hidden sm:flex"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-teal-900/60 dark:hover:bg-teal-800 dark:text-teal-200 dark:border-teal-700/50 text-[11px] font-semibold transition-colors hidden sm:flex"
             >
-              <Search className="w-3.5 h-3.5 text-teal-300" />
+              <Search className="w-3.5 h-3.5 text-teal-700 dark:text-teal-300" />
               <span>Public Verify</span>
             </button>
           </div>
 
-          {/* Right Controls: Switch Testing Persona dropdown & Auth Portal */}
+          {/* Right Controls: Theme Toggle, Switch Testing Persona dropdown & Auth Portal */}
           <div className="flex items-center gap-2">
+            {/* Theme Toggle Button */}
+            <button
+              id="theme-toggle-btn"
+              type="button"
+              onClick={toggleTheme}
+              className="p-1.5 rounded-lg text-slate-700 hover:text-slate-900 hover:bg-slate-100 dark:text-teal-200 dark:hover:text-white dark:hover:bg-teal-800/60 border border-slate-300 dark:border-teal-700/50 transition-colors flex items-center gap-1 text-xs"
+              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} theme`}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4 text-amber-300" />
+              ) : (
+                <Moon className="w-4 h-4 text-slate-600" />
+              )}
+              <span className="hidden sm:inline text-[10.5px] font-mono capitalize font-medium">
+                {theme}
+              </span>
+            </button>
+
             <SwitchTestingPersona />
 
             {/* Sign in / Switch License Button */}
@@ -180,7 +204,7 @@ export const RoleNavHeader: React.FC<RoleNavHeaderProps> = ({
                 id="header-open-auth-portal-btn"
                 type="button"
                 onClick={onOpenAuthPortal}
-                className="p-1.5 rounded-lg text-teal-300/80 hover:text-teal-100 hover:bg-teal-800/50 border border-teal-700/40 transition-colors"
+                className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-teal-300/80 dark:hover:text-teal-100 dark:hover:bg-teal-800/50 border border-slate-300 dark:border-teal-700/40 transition-colors"
                 title="Switch License / Onboard Portal"
               >
                 <LogIn className="w-4 h-4" />
@@ -190,7 +214,7 @@ export const RoleNavHeader: React.FC<RoleNavHeaderProps> = ({
         </div>
 
         {/* Role Navigation Bar */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 overflow-x-auto scrollbar-none py-1.5 flex items-center gap-1.5 bg-[#051713]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 overflow-x-auto scrollbar-none py-1.5 flex items-center gap-1.5 bg-slate-50/90 dark:bg-[#051713] border-t border-slate-200/80 dark:border-teal-900/40 transition-colors">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -202,8 +226,8 @@ export const RoleNavHeader: React.FC<RoleNavHeaderProps> = ({
                 onClick={() => handleSelectNav(item)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap flex items-center gap-2 transition-all ${
                   isActive
-                    ? 'bg-teal-800 text-white shadow-sm font-bold ring-1 ring-teal-500/50'
-                    : 'text-teal-200/70 hover:text-white hover:bg-teal-950/60'
+                    ? 'bg-teal-700 dark:bg-teal-800 text-white shadow-xs font-bold ring-1 ring-teal-600 dark:ring-teal-500/50'
+                    : 'text-slate-600 dark:text-teal-200/70 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-teal-950/60'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5 flex-shrink-0" />

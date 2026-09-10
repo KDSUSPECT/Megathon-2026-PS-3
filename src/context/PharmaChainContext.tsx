@@ -13,6 +13,8 @@ import {
   BatchStatus,
   NotificationItem,
   RiskScore,
+  PickupReminder,
+  FlaggedSealAlert,
 } from '../types/pharmachain';
 import {
   SEEDED_USERS,
@@ -103,7 +105,10 @@ interface PharmaChainContextType {
     confirmedQuantity: number;
     confirmedWeightKg: number;
     batchNumberScanned: string;
-  }) => Promise<TransitionResult>;
+    photos?: string[];
+    agentNotes?: string;
+    signingPin?: string;
+  }) => Promise<TransitionResult & { confirmation?: PickupConfirmation }>;
   
   scheduleDisposal: (params: {
     batchNumber: string;
@@ -118,6 +123,27 @@ interface PharmaChainContextType {
     recordedDisposedQty: number;
     certificateFileUrl?: string;
   }) => Promise<TransitionResult>;
+
+  // Manufacturer extended actions
+  pickupReminders: PickupReminder[];
+  sendPickupReminder: (batchNumber: string) => { success: boolean; message: string };
+  receiveMedicineAtFactory: (batchNumber: string) => Promise<TransitionResult>;
+  dispatchToDisposer: (params: {
+    batchNumber: string;
+    targetFacilityName?: string;
+    manifestNumber?: string;
+    sealNumber?: string;
+  }) => Promise<TransitionResult>;
+
+  // Seal Re-entry & Flagged Security
+  flaggedSealAlerts: FlaggedSealAlert[];
+  checkSealNumber: (sealNumber: string, attemptedAction?: string) => {
+    isFlagged: boolean;
+    sealNumber: string;
+    message: string;
+    reason?: string;
+    alertCreated?: boolean;
+  };
 
   // Fraud & Trust
   verifyBatchScan: (
@@ -155,7 +181,8 @@ const PharmaChainContext = createContext<PharmaChainContextType | undefined>(und
 
 export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [usersList, setUsersList] = useState<User[]>(() => SEEDED_USERS);
-  const [currentUser, setCurrentUser] = useState<User | null>(() => SEEDED_USERS[0]); // default Retailer
+  // Default to null so user lands on statutory login/role selection first
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [batches, setBatches] = useState<Batch[]>(() => SEEDED_BATCHES);
   const [productionRecords] = useState<ProductionRecord[]>(() => SEEDED_PRODUCTION_RECORDS);
   const [returnRequests, setReturnRequests] = useState<ReturnRequest[]>(() => SEEDED_RETURN_REQUESTS);
@@ -166,6 +193,43 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [ledger, setLedger] = useState<LedgerEntry[]>(() => generateInitialLedger());
   const [originalLedgerBackup, setOriginalLedgerBackup] = useState<LedgerEntry[]>(() => generateInitialLedger());
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  // Reverse logistics pickup reminders from Retailers to Manufacturer & Logistics
+  const [pickupReminders, setPickupReminders] = useState<PickupReminder[]>([
+    {
+      id: 1,
+      batchNumber: 'MET-850-2026B',
+      drugName: 'Metformin HCl 850mg (Glyciphage)',
+      retailerName: 'Apollo Pharmacy #402',
+      retailerLocation: 'Bandra West, Mumbai',
+      quarantinedUnits: 120,
+      reminderSentAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+      status: 'SENT',
+    },
+    {
+      id: 2,
+      batchNumber: 'TEL-40-2026C',
+      drugName: 'Telmisartan 40mg (Telma)',
+      retailerName: 'Apollo Pharmacy #402',
+      retailerLocation: 'Bandra West, Mumbai',
+      quarantinedUnits: 85,
+      reminderSentAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
+      status: 'ACKNOWLEDGED',
+    },
+  ]);
+
+  // Flagged seal detection database
+  const [flaggedSealAlerts, setFlaggedSealAlerts] = useState<FlaggedSealAlert[]>([
+    {
+      id: 1,
+      sealNumber: 'CPCB-HAZ-2025-SEAL-8849',
+      associatedBatchNumber: 'AZI-500-2026A',
+      flaggedReason: 'Seal tied to incinerated batch AZI-500-2026A. Detected attempted re-entry into supply chain.',
+      flaggedAt: new Date(Date.now() - 12 * 3600 * 1000).toISOString(),
+      attemptedAction: 'Barcode verification at retail intake',
+      reportedBy: 'CDSCO Automated Ledger Integrity Watchdog',
+    },
+  ]);
 
   const currentRole = currentUser?.role || 'RETAILER';
 
@@ -287,9 +351,10 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
     actorUser: User | null
   ): TransitionResult => {
     // 1. Manufacturer Batch Registry Validation:
-    // Reject any transition if no corresponding ProductionRecord exists
+    // Reject any transition if neither a ProductionRecord nor registered inventory batch exists
+    const targetBatch = batches.find((b) => b.batchNumber === batchNumber);
     const prodRecord = productionRecords.find((p) => p.batchNumber === batchNumber);
-    if (!prodRecord) {
+    if (!prodRecord && !targetBatch) {
       return {
         success: false,
         message: `Manufacturer Batch Registry Validation Failed: Batch '${batchNumber}' does not exist in the official production ledger! Counterfeit or unauthorized batch blocked.`,
@@ -297,7 +362,6 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
       };
     }
 
-    const targetBatch = batches.find((b) => b.batchNumber === batchNumber);
     if (!targetBatch) {
       return {
         success: false,
@@ -415,8 +479,19 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
     confirmedQuantity: number;
     confirmedWeightKg: number;
     batchNumberScanned: string;
-  }): Promise<TransitionResult> => {
-    const { returnRequestId, confirmedQuantity, confirmedWeightKg, batchNumberScanned } = params;
+    photos?: string[];
+    agentNotes?: string;
+    signingPin?: string;
+  }): Promise<TransitionResult & { confirmation?: PickupConfirmation }> => {
+    const {
+      returnRequestId,
+      confirmedQuantity,
+      confirmedWeightKg,
+      batchNumberScanned,
+      photos = [],
+      agentNotes = '',
+      signingPin = '',
+    } = params;
 
     const request = returnRequests.find((r) => r.id === returnRequestId);
     if (!request) {
@@ -439,6 +514,7 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
         claimedQuantity: claimedQty,
         confirmedQuantity,
         confirmedWeightKg,
+        photosCount: photos.length,
         discrepancy: claimedQty - confirmedQuantity,
         autoDisputeCreated: hasDiscrepancy,
       },
@@ -447,15 +523,27 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     if (!res.success) return res;
 
-    // Record pickup confirmation
+    const certRef = `CDSCO-REV-DIST-${new Date().getFullYear()}-${String(pickupConfirmations.length + 1).padStart(5, '0')}`;
+    const certHash = computeHash(
+      `${batchNumberScanned}:${confirmedQuantity}:${confirmedWeightKg}:${currentUser?.licenseNumber || 'DL-2023-DIS-33014'}:${Date.now()}`
+    );
+
+    // Record pickup confirmation with max 5 photos and distributor seal metadata
     const newConfirmation: PickupConfirmation = {
       id: pickupConfirmations.length + 1,
       returnRequestId,
       distributorId: currentUser?.linkedEntityId || 1,
-      distributorName: currentUser?.fullName || 'MedLink Logistics Ltd',
+      distributorName: currentUser?.fullName || currentUser?.entityName || 'Medilogix Logistics Hub',
+      distributorLicense: currentUser?.licenseNumber || 'DL-2023-DIS-33014',
       confirmedQuantity,
       confirmedWeightKg,
       batchNumberScanned,
+      photos: photos.slice(0, 5),
+      agentNotes: agentNotes || request.conditionNotes || 'Expired medicine safely received by distributor agent.',
+      signingPinUsed: signingPin || currentUser?.pin || '4421',
+      certificateReference: certRef,
+      certificateHash: certHash,
+      sealAuthorized: true,
       confirmedAt: new Date().toISOString(),
     };
     setPickupConfirmations((prev) => [newConfirmation, ...prev]);
@@ -501,13 +589,15 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
         success: true,
         message: `Pickup confirmed with DISCREPANCY (${claimedQty} claimed vs ${confirmedQuantity} received). Auto-created Dispute #${newDispute.id} and transitioned batch to DISPUTED.`,
         batch: res.batch,
+        confirmation: newConfirmation,
       };
     }
 
     return {
       success: true,
-      message: `Pickup confirmed matching exact quantity (${confirmedQuantity} units). Batch transitioned to DISTRIBUTOR_CONFIRMED.`,
+      message: `Pickup confirmed matching exact quantity (${confirmedQuantity} units). Statutory Certificate of Disposal generated with Distributor License Seal.`,
       batch: res.batch,
+      confirmation: newConfirmation,
     };
   };
 
@@ -548,14 +638,15 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
       return { success: false, message: 'Batch not found', error: 'NOT_FOUND' };
     }
 
-    // Only allowed if batch is currently DISTRIBUTOR_CONFIRMED or SCHEDULED_FOR_DESTRUCTION
+    // Allow if batch is DISTRIBUTOR_CONFIRMED, RECEIVED_AT_MANUFACTURER, or SCHEDULED_FOR_DESTRUCTION
     if (
       targetBatch.currentStatus !== 'DISTRIBUTOR_CONFIRMED' &&
+      targetBatch.currentStatus !== 'RECEIVED_AT_MANUFACTURER' &&
       targetBatch.currentStatus !== 'SCHEDULED_FOR_DESTRUCTION'
     ) {
       return {
         success: false,
-        message: `Destruction certificate rejected: Batch status must be DISTRIBUTOR_CONFIRMED or SCHEDULED_FOR_DESTRUCTION. Current status: ${targetBatch.currentStatus}`,
+        message: `Destruction certificate rejected: Batch status must be DISTRIBUTOR_CONFIRMED, RECEIVED_AT_MANUFACTURER, or SCHEDULED_FOR_DESTRUCTION. Current status: ${targetBatch.currentStatus}`,
         error: 'INVALID_STATUS_FOR_DESTRUCTION',
       };
     }
@@ -568,7 +659,7 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
         disposalDate,
         disposalMethod,
         recordedDisposedQty,
-        wasteFacility: currentUser?.fullName || 'GreenEarth Bio-Destruction',
+        wasteFacility: currentUser?.fullName || 'CleanEco Hazardous Incinerator',
       },
       currentUser
     );
@@ -600,6 +691,180 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
       success: true,
       message: `Destruction Certificate #${newCert.id} recorded. Batch ${batchNumber} transitioned to permanently DESTROYED.`,
       batch: res.batch,
+    };
+  };
+
+  // Manufacturer Action: Send Pickup Reminder to Retailer / Logistics
+  const sendPickupReminder = (batchNumber: string) => {
+    const batch = batches.find((b) => b.batchNumber === batchNumber);
+    const drugName = batch?.drugName || 'Pharmaceutical Product';
+    const newReminder: PickupReminder = {
+      id: pickupReminders.length + 1,
+      batchNumber,
+      drugName,
+      retailerName: 'Apollo Pharmacy #402',
+      retailerLocation: 'Bandra West, Mumbai',
+      quarantinedUnits: batch?.unitsCount || 100,
+      reminderSentAt: new Date().toISOString(),
+      status: 'SENT',
+    };
+    setPickupReminders((prev) => [newReminder, ...prev]);
+
+    setNotifications((prev) => [
+      {
+        id: `reminder-${Date.now()}`,
+        batchNumber,
+        title: 'Reverse Logistics Pickup Reminder Dispatched',
+        message: `Manufacturer issued formal pickup directive to Medilogix Logistics for expired batch ${batchNumber} (${drugName}) at Apollo Pharmacy.`,
+        type: 'EXPIRY_WARNING',
+        timestamp: new Date().toISOString(),
+        read: false,
+      },
+      ...prev,
+    ]);
+
+    return {
+      success: true,
+      message: `Statutory pickup reminder dispatched to logistics and pharmacy for batch ${batchNumber}.`,
+    };
+  };
+
+  // Manufacturer Action: Acknowledge Receiving Medicine at Factory Dock
+  const receiveMedicineAtFactory = async (batchNumber: string): Promise<TransitionResult> => {
+    const targetBatch = batches.find((b) => b.batchNumber === batchNumber);
+    if (!targetBatch) {
+      return { success: false, message: 'Batch not found in ledger.', error: 'NOT_FOUND' };
+    }
+
+    const res = transitionBatchStatus(
+      batchNumber,
+      'RECEIVED_AT_MANUFACTURER',
+      'RECEIVED_AT_PLANT',
+      {
+        receivedBy: currentUser?.fullName || 'Sun Pharma QA Intake Inspector',
+        plantWarehouse: 'Sun Pharma Baddi Unit III - Hazardous Staging Bay 4',
+        receivedUnits: targetBatch.unitsCount,
+        qcSealIntact: true,
+        inspectionPassed: true,
+      },
+      currentUser
+    );
+
+    if (res.success) {
+      setNotifications((prev) => [
+        {
+          id: `factory-recv-${Date.now()}`,
+          batchNumber,
+          title: 'Batch Received at Manufacturing Plant',
+          message: `Batch ${batchNumber} logged at factory intake dock. Ready for hazardous disposal transfer.`,
+          type: 'EXPIRY_WARNING',
+          timestamp: new Date().toISOString(),
+          read: false,
+        },
+        ...prev,
+      ]);
+    }
+
+    return res;
+  };
+
+  // Manufacturer Action: Dispatch Received Medicines to Authorized Waste Disposer
+  const dispatchToDisposer = async (params: {
+    batchNumber: string;
+    targetFacilityName?: string;
+    manifestNumber?: string;
+    sealNumber?: string;
+  }): Promise<TransitionResult> => {
+    const {
+      batchNumber,
+      targetFacilityName = 'CleanEco Hazardous Incinerator (CPCB-HAZ-2024-887)',
+      manifestNumber = `CPCB-HAZ-DISP-${Date.now().toString().slice(-6)}`,
+      sealNumber = `DISP-SEAL-${Math.floor(1000 + Math.random() * 9000)}`,
+    } = params;
+
+    const res = transitionBatchStatus(
+      batchNumber,
+      'SCHEDULED_FOR_DESTRUCTION',
+      'DISPOSAL_SCHEDULED',
+      {
+        targetFacilityName,
+        manifestNumber,
+        sealNumber,
+        dispatchedFrom: currentUser?.entityName || 'Sun Pharma Baddi Unit III',
+        dispatchedAt: new Date().toISOString(),
+      },
+      currentUser
+    );
+
+    if (res.success) {
+      setNotifications((prev) => [
+        {
+          id: `dispatched-${Date.now()}`,
+          batchNumber,
+          title: 'Batch Dispatched to Hazardous Waste Incinerator',
+          message: `Batch ${batchNumber} dispatched under Gate Pass #${manifestNumber} (Seal #${sealNumber}) to ${targetFacilityName}.`,
+          type: 'EXPIRY_WARNING',
+          timestamp: new Date().toISOString(),
+          read: false,
+        },
+        ...prev,
+      ]);
+    }
+
+    return res;
+  };
+
+  // Seal Re-Entry & Tamper Flag Check
+  const checkSealNumber = (sealNumber: string, attemptedAction: string = 'Manifest verification') => {
+    const clean = sealNumber.trim().toUpperCase();
+    const FLAGGED_SEAL_LIST = [
+      'CPCB-HAZ-2025-SEAL-8849',
+      'CDSCO-FLAGGED-SEAL-991',
+      'DISP-SEAL-COMPROMISED-442',
+      'MFR-DISP-SEAL-0077',
+    ];
+
+    const isFlagged = FLAGGED_SEAL_LIST.includes(clean) || clean.includes('FLAGGED') || clean.includes('COMPROMISED');
+
+    if (isFlagged) {
+      const newAlert: FlaggedSealAlert = {
+        id: flaggedSealAlerts.length + 1,
+        sealNumber: clean,
+        flaggedReason: 'Seal has previously been revoked, marked compromised, or linked to destroyed medicine packaging!',
+        flaggedAt: new Date().toISOString(),
+        attemptedAction,
+        reportedBy: currentUser?.fullName || 'Statutory Enforcement Watchdog',
+      };
+      setFlaggedSealAlerts((prev) => [newAlert, ...prev]);
+
+      // Push high-priority fraud notification
+      setNotifications((prev) => [
+        {
+          id: `seal-alert-${newAlert.id}`,
+          batchNumber: clean,
+          title: '🚨 FLAGGED SEAL RE-ENTRY DETECTED!',
+          message: `Unauthorized attempt to enter decommissioned seal #${clean} during ${attemptedAction}. Immediate CDSCO freeze activated!`,
+          type: 'FRAUD_ALERT',
+          timestamp: new Date().toISOString(),
+          read: false,
+        },
+        ...prev,
+      ]);
+
+      return {
+        isFlagged: true,
+        sealNumber: clean,
+        message: `🚨 CRITICAL RE-ENTRY ALERT: Seal #${clean} is FLAGGED! This seal was decommissioned or reported compromised. Re-circulation attempt blocked under Rule 65!`,
+        reason: 'Previously retired or compromised statutory seal number.',
+        alertCreated: true,
+      };
+    }
+
+    return {
+      isFlagged: false,
+      sealNumber: clean,
+      message: `✅ Seal #${clean} is valid, authenticated, and authorized in CPCB registry.`,
+      alertCreated: false,
     };
   };
 
@@ -873,6 +1138,12 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
         confirmPickup,
         scheduleDisposal,
         issueDestructionCertificate,
+        pickupReminders,
+        sendPickupReminder,
+        receiveMedicineAtFactory,
+        dispatchToDisposer,
+        flaggedSealAlerts,
+        checkSealNumber,
         verifyBatchScan,
         reconcileBatch,
         verifyLedgerForBatch,

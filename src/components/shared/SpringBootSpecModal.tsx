@@ -12,6 +12,7 @@ import {
   FileCode,
   ExternalLink,
 } from 'lucide-react';
+import { PortalModal } from './PortalModal';
 
 interface SpringBootSpecModalProps {
   isOpen: boolean;
@@ -75,11 +76,12 @@ public class PharmaChainController {
 }`;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in"
+    <PortalModal
       id="spring-boot-spec-modal"
+      onClose={onClose}
+      className="bg-white dark:bg-[#071914] rounded-2xl shadow-2xl border border-slate-200 dark:border-teal-900/60 max-w-3xl w-full overflow-hidden flex flex-col max-h-[90vh] text-slate-900 dark:text-slate-100"
     >
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-3xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="flex flex-col h-full overflow-hidden">
         {/* Modal Header */}
         <div className="bg-[#071d18] text-white px-6 py-4 flex items-center justify-between border-b border-teal-900/60">
           <div className="flex items-center gap-3">
@@ -228,16 +230,16 @@ public class PharmaChainController {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
+        <div className="px-6 py-3 bg-slate-50 dark:bg-[#061612] border-t border-slate-200 dark:border-teal-900/60 flex items-center justify-between text-[11px] text-slate-500 dark:text-teal-300/70">
           <span>Compliant with CDSCO 2025 Digital Mandate & Schedule M</span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-semibold transition-colors"
+            className="px-4 py-1.5 bg-teal-800 hover:bg-teal-700 text-white rounded-lg font-semibold transition-colors"
           >
             Close Spec
           </button>
         </div>
       </div>
-    </div>
+    </PortalModal>
   );
 };

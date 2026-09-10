@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PharmaChainProvider, usePharmaChain } from './context/PharmaChainContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { RoleNavHeader } from './components/navigation/RoleNavHeader';
 import { AlertBanner } from './components/shared/AlertBanner';
 import { QrScannerModal } from './components/shared/QrScannerModal';
@@ -31,7 +32,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7faf9] text-slate-900 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f7faf9] dark:bg-[#051612] text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       {/* Top Persistent Alerts (e.g. Re-entry fraud detected) */}
       <AlertBanner />
 
@@ -65,12 +66,12 @@ const AppContent: React.FC = () => {
       )}
 
       {/* Official Statutory Footer */}
-      <footer className="bg-white border-t border-slate-200 py-6 text-slate-500 text-xs text-center no-print">
+      <footer className="bg-white dark:bg-[#071d18] border-t border-slate-200 dark:border-teal-900/60 py-6 text-slate-500 dark:text-teal-200/70 text-xs text-center no-print transition-colors">
         <div className="max-w-7xl mx-auto px-4 space-y-1">
-          <p className="font-semibold text-slate-700">
+          <p className="font-semibold text-slate-700 dark:text-teal-100">
             Pharma Reverse Chain Compliance Platform © 2025. Built for India CDSCO statutory mandate.
           </p>
-          <p className="text-slate-400 text-[11px]">
+          <p className="text-slate-400 dark:text-teal-300/50 text-[11px]">
             Immutable SHA-256 Ledger • HMAC-Signed QR • Zero Re-Entry Guarantee • Schedule M & Rule 65 Compliant
           </p>
         </div>
@@ -81,9 +82,11 @@ const AppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <PharmaChainProvider>
-      <AppContent />
-    </PharmaChainProvider>
+    <ThemeProvider>
+      <PharmaChainProvider>
+        <AppContent />
+      </PharmaChainProvider>
+    </ThemeProvider>
   );
 }
 

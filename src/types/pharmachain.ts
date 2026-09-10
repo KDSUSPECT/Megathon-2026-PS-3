@@ -6,6 +6,7 @@ export type BatchStatus =
   | 'RETURN_INITIATED' 
   | 'DISTRIBUTOR_CONFIRMED' 
   | 'DISPUTED' 
+  | 'RECEIVED_AT_MANUFACTURER'
   | 'SCHEDULED_FOR_DESTRUCTION' 
   | 'DESTROYED' 
   | 'RE_ENTRY_FLAGGED';
@@ -22,6 +23,7 @@ export type EventType =
   | 'RETURN_REQUESTED' 
   | 'PICKUP_CONFIRMED' 
   | 'DISPUTE_RAISED' 
+  | 'RECEIVED_AT_PLANT'
   | 'DISPOSAL_SCHEDULED' 
   | 'CERTIFICATE_ISSUED' 
   | 'FRAUD_ALERT_TRIGGERED' 
@@ -129,10 +131,47 @@ export interface PickupConfirmation {
   returnRequestId: number;
   distributorId: number;
   distributorName: string;
+  distributorLicense?: string;
   confirmedQuantity: number;
   confirmedWeightKg: number;
   batchNumberScanned: string;
+  photos?: string[]; // Agent uploaded photos of expired medicine/tablets (max 5)
+  agentNotes?: string;
+  signingPinUsed?: string;
+  certificateReference?: string;
+  certificateHash?: string;
+  sealAuthorized?: boolean;
   confirmedAt: string;
+}
+
+export interface DistributorDisposalCertificate {
+  id: number;
+  certificateNumber: string;
+  batchNumber: string;
+  drugName: string;
+  formulaName?: string;
+  pharmacyName: string;
+  pharmacyLicense: string;
+  distributorName: string;
+  distributorLicense: string;
+  pickupDate: string;
+  claimedQuantity: number;
+  disposedTabletsCount: number;
+  confirmedWeightKg: number;
+  conditionSummary: string;
+  photos: string[];
+  officerName: string;
+  signingPin: string;
+  certificateHash: string;
+  distributorSeal: {
+    licenseNumber: string;
+    sealTitle: string;
+    authorizedBody: string;
+    timestamp: string;
+    cryptographicProof: string;
+  };
+  status: 'CERTIFIED_FOR_HAZARDOUS_DISPOSAL' | 'IN_TRANSIT_TO_INCINERATOR' | 'SEALED_ON_LEDGER';
+  issuedAt: string;
 }
 
 export interface Dispute {
@@ -206,4 +245,25 @@ export interface NotificationItem {
   type: 'EXPIRY_WARNING' | 'CRITICAL_EXPIRY' | 'FRAUD_ALERT' | 'DISPUTE_RAISED';
   timestamp: string;
   read: boolean;
+}
+
+export interface PickupReminder {
+  id: number;
+  batchNumber: string;
+  drugName: string;
+  retailerName: string;
+  retailerLocation: string;
+  quarantinedUnits: number;
+  reminderSentAt: string;
+  status: 'SENT' | 'ACKNOWLEDGED' | 'DISPATCHED';
+}
+
+export interface FlaggedSealAlert {
+  id: number;
+  sealNumber: string;
+  associatedBatchNumber?: string;
+  flaggedReason: string;
+  flaggedAt: string;
+  attemptedAction: string;
+  reportedBy: string;
 }
