@@ -35,9 +35,9 @@ const QUICK_ROLES: QuickRoleCard[] = [
     label: 'Apollo / RETAILER',
     name: 'Retailer (Apollo Pharmacy)',
     entityName: 'Apollo Medicos #402',
-    username: 'apollo_pharmacy',
+    username: 'retailer.apollo',
     license: 'DL-2024-RET-88129',
-    pin: '8812',
+    pin: '1234',
     icon: Store,
     color: 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100/70',
   },
@@ -46,9 +46,9 @@ const QUICK_ROLES: QuickRoleCard[] = [
     label: 'Medilogix / DISTRIBUTOR',
     name: 'Distributor (Medilogix Logistics)',
     entityName: 'Medilogix Logistics Hub',
-    username: 'medilogix_logistics',
+    username: 'distributor.medlink',
     license: 'DL-2023-DIS-33014',
-    pin: '3301',
+    pin: '1234',
     icon: Truck,
     color: 'text-cyan-800 bg-cyan-50 border-cyan-200 hover:bg-cyan-100/70',
   },
@@ -57,9 +57,9 @@ const QUICK_ROLES: QuickRoleCard[] = [
     label: 'Sun / MANUFACTURER',
     name: 'Manufacturer (Sun Pharma)',
     entityName: 'Sun Pharma Baddi Unit III',
-    username: 'sun_pharma',
+    username: 'mfr.cipla',
     license: 'MFG-2022-IND-00412',
-    pin: '0041',
+    pin: '1234',
     icon: Building2,
     color: 'text-emerald-800 bg-emerald-50 border-emerald-200 hover:bg-emerald-100/70',
   },
@@ -68,9 +68,9 @@ const QUICK_ROLES: QuickRoleCard[] = [
     label: 'CleanEco / WASTE_FACILITY',
     name: 'Waste Facility (CleanEco Waste)',
     entityName: 'CleanEco Hazardous Incinerator',
-    username: 'cleaneco_waste',
+    username: 'waste.greenearth',
     license: 'CPCB-HAZ-2024-887',
-    pin: '2024',
+    pin: '1234',
     icon: Flame,
     color: 'text-amber-800 bg-amber-50 border-amber-200 hover:bg-amber-100/70',
   },
@@ -79,9 +79,9 @@ const QUICK_ROLES: QuickRoleCard[] = [
     label: 'Dr. / REGULATOR',
     name: 'Regulator (Dr. Verma CDSCO)',
     entityName: 'Dr. R.K. Verma (CDSCO Enforcement)',
-    username: 'dr_verma_cdsco',
+    username: 'regulator.cdsco',
     license: 'CDSCO-WZ-REG-01',
-    pin: '9999',
+    pin: '1234',
     icon: ShieldCheck,
     color: 'text-rose-800 bg-rose-50 border-rose-200 hover:bg-rose-100/70',
   },
@@ -96,10 +96,10 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onSuccess }) => {
   const [mode, setMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
 
   // Sign In State
-  const [loginUsername, setLoginUsername] = useState('apollo_pharmacy');
+  const [loginUsername, setLoginUsername] = useState('retailer.apollo');
   const [loginLicense, setLoginLicense] = useState('DL-2024-RET-88129');
-  const [loginPassword, setLoginPassword] = useState('demo1234');
-  const [loginPin, setLoginPin] = useState('8812');
+  const [loginPassword, setLoginPassword] = useState('1234');
+  const [loginPin, setLoginPin] = useState('1234');
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // Registration State
@@ -117,22 +117,22 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onSuccess }) => {
   const handleQuickAutofill = (roleCard: QuickRoleCard) => {
     setLoginUsername(roleCard.username);
     setLoginLicense(roleCard.license);
-    setLoginPassword('demo1234');
+    setLoginPassword('1234');
     setLoginPin(roleCard.pin);
     setLoginError(null);
   };
 
-  const handleDirectRoleLogin = (roleCard: QuickRoleCard) => {
+  const handleDirectRoleLogin = async (roleCard: QuickRoleCard) => {
     setLoginUsername(roleCard.username);
     setLoginLicense(roleCard.license);
     setLoginPin(roleCard.pin);
-    const success = loginWithCredentials(roleCard.username, roleCard.pin);
+    const success = await loginWithCredentials(roleCard.username, roleCard.pin);
     if (success && onSuccess) {
       onSuccess();
     }
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
 
@@ -141,7 +141,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onSuccess }) => {
       return;
     }
 
-    const success = loginWithCredentials(
+    const success = await loginWithCredentials(
       loginUsername || loginLicense,
       loginPin || loginPassword
     );
@@ -373,7 +373,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onSuccess }) => {
                     value={loginUsername}
                     onChange={(e) => setLoginUsername(e.target.value)}
                     placeholder="e.g. apollo_pharmacy"
-                    className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all font-mono"
+                    className="w-full px-3.5 py-2 text-sm text-slate-900 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all font-mono"
                     required
                   />
                 </div>
@@ -390,7 +390,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onSuccess }) => {
                     value={loginLicense}
                     onChange={(e) => setLoginLicense(e.target.value)}
                     placeholder="e.g. DL-2024-RET-88129"
-                    className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all font-mono uppercase"
+                    className="w-full px-3.5 py-2 text-sm text-slate-900 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all font-mono uppercase"
                     required
                   />
                   <p className="text-[10.5px] text-slate-500 mt-1">
@@ -410,7 +410,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onSuccess }) => {
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all"
+                        className="w-full px-3.5 py-2 text-sm text-slate-900 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all"
                         required
                       />
                       <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
@@ -431,7 +431,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({ onSuccess }) => {
                       value={loginPin}
                       onChange={(e) => setLoginPin(e.target.value)}
                       placeholder="e.g. 8812"
-                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all font-mono tracking-widest text-center"
+                      className="w-full px-3.5 py-2 text-sm text-slate-900 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all font-mono tracking-widest text-center"
                       required
                     />
                   </div>
