@@ -38,6 +38,7 @@ import {
   computeHash,
 } from '../services/crypto';
 import { calculateRiskScore } from '../services/riskScore';
+import { api } from '../services/api';
 
 interface TransitionResult {
   success: boolean;
@@ -74,7 +75,7 @@ interface PharmaChainContextType {
   
   // Auth
   loginAsRole: (role: Role) => void;
-  loginWithCredentials: (usernameOrLicense: string, pinOrPassword?: string) => boolean;
+  loginWithCredentials: (usernameOrLicense: string, pinOrPassword?: string) => Promise<boolean>;
   registerEntity: (params: {
     username: string;
     role: Role;
@@ -233,6 +234,27 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const currentRole = currentUser?.role || 'RETAILER';
 
+  // Load authoritative state from the Spring Boot + MySQL backend.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [serverBatches, serverReturns, serverDisputes, serverCertificates, serverAlerts] = await Promise.all([
+          api.batches(), api.returns(), api.disputes(), api.certificates(), api.alerts()
+        ]);
+        if (cancelled) return;
+        setBatches(serverBatches as Batch[]);
+        setReturnRequests(serverReturns as ReturnRequest[]);
+        setDisputes(serverDisputes as Dispute[]);
+        setDestructionCertificates(serverCertificates as DestructionCertificate[]);
+        setReEntryAlerts(serverAlerts as ReEntryAlert[]);
+      } catch (error) {
+        console.warn('PharmaChain backend unavailable; using demo seed data.', error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Scheduled job simulation: daily scan for batches within 60 days and 3 days of expiry
   useEffect(() => {
     const today = new Date();
@@ -281,22 +303,27 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
     loginAsRole(role);
   };
 
-  const loginWithCredentials = (usernameOrLicense: string, pinOrPassword?: string) => {
-    const term = usernameOrLicense.trim().toLowerCase();
-    const user = usersList.find(
-      (u) =>
-        u.username.toLowerCase() === term ||
-        (u.licenseNumber && u.licenseNumber.toLowerCase() === term) ||
-        (u.email && u.email.toLowerCase() === term)
-    );
-    if (user) {
-      if (pinOrPassword && user.pin && pinOrPassword.trim() && user.pin !== pinOrPassword.trim()) {
-        // Allow fallback if pin matches or let through
-      }
+  const loginWithCredentials = async (usernameOrLicense: string, pinOrPassword?: string) => {
+    try {
+      const response = await api.login(usernameOrLicense.trim(), (pinOrPassword || '').trim());
+      const seeded = SEEDED_USERS.find((u) => u.username.toLowerCase() === String(response.username).toLowerCase());
+      const user: User = {
+        id: Number(response.userId),
+        username: response.username,
+        role: response.role as Role,
+        linkedEntityId: Number(response.linkedEntityId),
+        fullName: response.fullName,
+        entityName: response.entityName,
+        email: seeded?.email || `${response.username}@pharmachain.in`,
+        licenseNumber: seeded?.licenseNumber,
+        pin: pinOrPassword,
+      };
       setCurrentUser(user);
       return true;
+    } catch (error) {
+      console.warn('Backend login failed:', error);
+      return false;
     }
-    return false;
   };
 
   const registerEntity = (params: {
@@ -326,16 +353,22 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Simulates POST /api/dev/switch-persona
   const switchPersonaDevEndpoint = async (role: Role) => {
-    // Lightweight dev endpoint simulation
-    console.info(`[DEV API] POST /api/dev/switch-persona { targetRole: '${role}' } -> 200 OK (Swapped active session)`);
-    const matched = usersList.find((u) => u.role === role) || SEEDED_USERS.find((u) => u.role === role) || SEEDED_USERS[0];
-    setCurrentUser(matched);
-    return {
-      success: true,
-      role: matched.role,
-      entityName: matched.entityName || matched.fullName,
-      licenseNumber: matched.licenseNumber || '',
-    };
+    try {
+      const response = await api.switchPersona(role);
+      const matched = SEEDED_USERS.find((u) => u.role === role) || usersList.find((u) => u.role === role);
+      if (matched) setCurrentUser(matched);
+      return {
+        success: true,
+        role: (response.role || role) as Role,
+        entityName: matched?.entityName || matched?.fullName || '',
+        licenseNumber: matched?.licenseNumber || '',
+      };
+    } catch (error) {
+      console.warn('Persona switch failed:', error);
+      const matched = usersList.find((u) => u.role === role) || SEEDED_USERS.find((u) => u.role === role) || SEEDED_USERS[0];
+      setCurrentUser(matched);
+      return { success: true, role: matched.role, entityName: matched.entityName || matched.fullName, licenseNumber: matched.licenseNumber || '' };
+    }
   };
 
   const logout = () => {
@@ -431,174 +464,49 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // RetailerController: POST /api/retailer/return-request
   const createReturnRequest = async (params: {
-    batchNumber: string;
-    claimedQuantity: number;
-    conditionNotes: string;
-    photoUrl?: string;
+    batchNumber: string; claimedQuantity: number; conditionNotes: string; photoUrl?: string;
   }): Promise<TransitionResult> => {
-    const { batchNumber, claimedQuantity, conditionNotes, photoUrl } = params;
-
-    const res = transitionBatchStatus(
-      batchNumber,
-      'RETURN_INITIATED',
-      'RETURN_REQUESTED',
-      {
-        claimedQuantity,
-        conditionNotes,
-        hasPhotoEvidence: !!photoUrl,
-      },
-      currentUser
-    );
-
-    if (!res.success) return res;
-
-    const newRequest: ReturnRequest = {
-      id: returnRequests.length + 1,
-      batchNumber,
-      retailerId: currentUser?.linkedEntityId || 1,
-      retailerName: currentUser?.fullName || 'Apollo Pharmacy #402',
-      claimedQuantity,
-      conditionNotes,
-      photoUrl: photoUrl || 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80',
-      status: 'PENDING',
-      initiatedAt: new Date().toISOString(),
-    };
-
-    setReturnRequests((prev) => [newRequest, ...prev]);
-
-    return {
-      success: true,
-      message: `Return request #${newRequest.id} submitted for batch ${batchNumber}. Batch moved to RETURN_INITIATED.`,
-      batch: res.batch,
-    };
+    try {
+      const request = await api.createReturn({
+        batchNumber: params.batchNumber,
+        retailerId: currentUser?.linkedEntityId || 1,
+        originPharmacyLicense: currentUser?.licenseNumber || '',
+        claimedQuantity: params.claimedQuantity,
+        conditionNotes: params.conditionNotes,
+        photoUrl: params.photoUrl || '',
+      });
+      setReturnRequests(prev => [request as ReturnRequest, ...prev.filter(r => r.id !== request.id)]);
+      const updated = await api.batches();
+      setBatches(updated as Batch[]);
+      return { success: true, message: `Return request #${request.id} submitted for batch ${params.batchNumber}.`, batch: (updated as Batch[]).find(b => b.batchNumber === params.batchNumber) };
+    } catch (error: any) {
+      return { success: false, message: error.message || 'Failed to create return request.', error: 'API_ERROR' };
+    }
   };
 
   // DistributorController: POST /api/distributor/confirm-pickup
   const confirmPickup = async (params: {
-    returnRequestId: number;
-    confirmedQuantity: number;
-    confirmedWeightKg: number;
-    batchNumberScanned: string;
-    photos?: string[];
-    agentNotes?: string;
-    signingPin?: string;
+    returnRequestId: number; confirmedQuantity: number; confirmedWeightKg: number; batchNumberScanned: string; photos?: string[]; agentNotes?: string; signingPin?: string;
   }): Promise<TransitionResult & { confirmation?: PickupConfirmation }> => {
-    const {
-      returnRequestId,
-      confirmedQuantity,
-      confirmedWeightKg,
-      batchNumberScanned,
-      photos = [],
-      agentNotes = '',
-      signingPin = '',
-    } = params;
-
-    const request = returnRequests.find((r) => r.id === returnRequestId);
-    if (!request) {
-      return { success: false, message: 'Return request not found', error: 'NOT_FOUND' };
+    try {
+      const response = await api.confirmPickup(params.returnRequestId, {
+        distributorId: currentUser?.linkedEntityId || 1,
+        distributorLicense: currentUser?.licenseNumber || 'DL-2023-DIS-33014',
+        confirmedQuantity: params.confirmedQuantity,
+        confirmedWeightKg: params.confirmedWeightKg,
+        batchNumberScanned: params.batchNumberScanned,
+        photos: (params.photos || []).slice(0, 5),
+        agentNotes: params.agentNotes || '',
+        signingPinUsed: params.signingPin || currentUser?.pin || '1234',
+      });
+      const [serverReturns, serverBatches, serverDisputes] = await Promise.all([api.returns(), api.batches(), api.disputes()]);
+      setReturnRequests(serverReturns as ReturnRequest[]);
+      setBatches(serverBatches as Batch[]);
+      setDisputes(serverDisputes as Dispute[]);
+      return { success: response.success !== false, message: response.message || 'Pickup confirmed.', batch: (serverBatches as Batch[]).find(b => b.batchNumber === params.batchNumberScanned) };
+    } catch (error: any) {
+      return { success: false, message: error.message || 'Failed to confirm pickup.', error: 'API_ERROR' };
     }
-
-    const claimedQty = request.claimedQuantity;
-    const hasDiscrepancy = claimedQty !== confirmedQuantity;
-
-    // Determine next batch status and dispute creation
-    const nextStatus: BatchStatus = hasDiscrepancy ? 'DISPUTED' : 'DISTRIBUTOR_CONFIRMED';
-    const eventType: LedgerEntry['eventType'] = hasDiscrepancy ? 'DISPUTE_RAISED' : 'PICKUP_CONFIRMED';
-
-    const res = transitionBatchStatus(
-      batchNumberScanned,
-      nextStatus,
-      eventType,
-      {
-        returnRequestId,
-        claimedQuantity: claimedQty,
-        confirmedQuantity,
-        confirmedWeightKg,
-        photosCount: photos.length,
-        discrepancy: claimedQty - confirmedQuantity,
-        autoDisputeCreated: hasDiscrepancy,
-      },
-      currentUser
-    );
-
-    if (!res.success) return res;
-
-    const certRef = `CDSCO-REV-DIST-${new Date().getFullYear()}-${String(pickupConfirmations.length + 1).padStart(5, '0')}`;
-    const certHash = computeHash(
-      `${batchNumberScanned}:${confirmedQuantity}:${confirmedWeightKg}:${currentUser?.licenseNumber || 'DL-2023-DIS-33014'}:${Date.now()}`
-    );
-
-    // Record pickup confirmation with max 5 photos and distributor seal metadata
-    const newConfirmation: PickupConfirmation = {
-      id: pickupConfirmations.length + 1,
-      returnRequestId,
-      distributorId: currentUser?.linkedEntityId || 1,
-      distributorName: currentUser?.fullName || currentUser?.entityName || 'Medilogix Logistics Hub',
-      distributorLicense: currentUser?.licenseNumber || 'DL-2023-DIS-33014',
-      confirmedQuantity,
-      confirmedWeightKg,
-      batchNumberScanned,
-      photos: photos.slice(0, 5),
-      agentNotes: agentNotes || request.conditionNotes || 'Expired medicine safely received by distributor agent.',
-      signingPinUsed: signingPin || currentUser?.pin || '4421',
-      certificateReference: certRef,
-      certificateHash: certHash,
-      sealAuthorized: true,
-      confirmedAt: new Date().toISOString(),
-    };
-    setPickupConfirmations((prev) => [newConfirmation, ...prev]);
-
-    // Update return request status
-    setReturnRequests((prev) =>
-      prev.map((r) =>
-        r.id === returnRequestId ? { ...r, status: hasDiscrepancy ? 'DISPUTED' : 'CONFIRMED' } : r
-      )
-    );
-
-    // If quantity mismatch, auto-create Dispute!
-    if (hasDiscrepancy) {
-      const newDispute: Dispute = {
-        id: disputes.length + 1,
-        batchNumber: batchNumberScanned,
-        retailerClaimedQty: claimedQty,
-        distributorConfirmedQty: confirmedQuantity,
-        status: 'OPEN',
-        disputeType: 'QUANTITY_MISMATCH',
-        resolutionNotes: `Auto-generated discrepancy: Retailer claimed ${claimedQty} units, but Distributor scan confirmed ${confirmedQuantity} units (difference: ${
-          claimedQty - confirmedQuantity
-        }). Batch quarantined in DISPUTED state.`,
-        raisedAt: new Date().toISOString(),
-      };
-      setDisputes((prev) => [newDispute, ...prev]);
-
-      // Add alert notification
-      setNotifications((prev) => [
-        {
-          id: `dispute-${newDispute.id}`,
-          batchNumber: batchNumberScanned,
-          title: `Quantity Discrepancy Dispute Raised`,
-          message: `Batch ${batchNumberScanned}: Claimed ${claimedQty} vs Confirmed ${confirmedQuantity}. Auto-flagged for regulatory audit.`,
-          type: 'DISPUTE_RAISED',
-          timestamp: new Date().toISOString(),
-          read: false,
-        },
-        ...prev,
-      ]);
-
-      return {
-        success: true,
-        message: `Pickup confirmed with DISCREPANCY (${claimedQty} claimed vs ${confirmedQuantity} received). Auto-created Dispute #${newDispute.id} and transitioned batch to DISPUTED.`,
-        batch: res.batch,
-        confirmation: newConfirmation,
-      };
-    }
-
-    return {
-      success: true,
-      message: `Pickup confirmed matching exact quantity (${confirmedQuantity} units). Statutory Certificate of Disposal generated with Distributor License Seal.`,
-      batch: res.batch,
-      confirmation: newConfirmation,
-    };
   };
 
   // ManufacturerController: POST /api/manufacturer/schedule-disposal
@@ -625,73 +533,26 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // WasteFacilityController: POST /api/facility/destruction-certificate
   const issueDestructionCertificate = async (params: {
-    batchNumber: string;
-    disposalDate: string;
-    disposalMethod: string;
-    recordedDisposedQty: number;
-    certificateFileUrl?: string;
+    batchNumber: string; disposalDate: string; disposalMethod: string; recordedDisposedQty: number; certificateFileUrl?: string;
   }): Promise<TransitionResult> => {
-    const { batchNumber, disposalDate, disposalMethod, recordedDisposedQty, certificateFileUrl } = params;
-
-    const targetBatch = batches.find((b) => b.batchNumber === batchNumber);
-    if (!targetBatch) {
-      return { success: false, message: 'Batch not found', error: 'NOT_FOUND' };
+    try {
+      const response = await api.issueCertificate({
+        batchNumber: params.batchNumber,
+        wasteFacilityId: currentUser?.linkedEntityId || 1,
+        manifestNumber: '',
+        disposalDate: params.disposalDate.length === 10 ? `${params.disposalDate}T00:00:00` : params.disposalDate,
+        disposalMethod: params.disposalMethod,
+        destructionMethod: params.disposalMethod,
+        recordedDisposedQty: params.recordedDisposedQty,
+        certificateFileUrl: params.certificateFileUrl || '',
+      });
+      const [serverCertificates, serverBatches] = await Promise.all([api.certificates(), api.batches()]);
+      setDestructionCertificates(serverCertificates as DestructionCertificate[]);
+      setBatches(serverBatches as Batch[]);
+      return { success: true, message: response.message || 'Destruction certificate issued.', batch: (serverBatches as Batch[]).find(b => b.batchNumber === params.batchNumber) };
+    } catch (error: any) {
+      return { success: false, message: error.message || 'Failed to issue destruction certificate.', error: 'API_ERROR' };
     }
-
-    // Allow if batch is DISTRIBUTOR_CONFIRMED, RECEIVED_AT_MANUFACTURER, or SCHEDULED_FOR_DESTRUCTION
-    if (
-      targetBatch.currentStatus !== 'DISTRIBUTOR_CONFIRMED' &&
-      targetBatch.currentStatus !== 'RECEIVED_AT_MANUFACTURER' &&
-      targetBatch.currentStatus !== 'SCHEDULED_FOR_DESTRUCTION'
-    ) {
-      return {
-        success: false,
-        message: `Destruction certificate rejected: Batch status must be DISTRIBUTOR_CONFIRMED, RECEIVED_AT_MANUFACTURER, or SCHEDULED_FOR_DESTRUCTION. Current status: ${targetBatch.currentStatus}`,
-        error: 'INVALID_STATUS_FOR_DESTRUCTION',
-      };
-    }
-
-    const res = transitionBatchStatus(
-      batchNumber,
-      'DESTROYED',
-      'CERTIFICATE_ISSUED',
-      {
-        disposalDate,
-        disposalMethod,
-        recordedDisposedQty,
-        wasteFacility: currentUser?.fullName || 'CleanEco Hazardous Incinerator',
-      },
-      currentUser
-    );
-
-    if (!res.success) return res;
-
-    const newCert: DestructionCertificate = {
-      id: destructionCertificates.length + 1,
-      batchNumber,
-      manifestNumber: `#CPCB-HAZ-${new Date().getFullYear()}-00${destructionCertificates.length + 1}`,
-      wasteFacilityId: currentUser?.linkedEntityId || 1,
-      facilityName: currentUser?.fullName || 'CleanEco Hazardous Incinerator',
-      facilityLicense: currentUser?.licenseNumber || 'CPCB-HAZ-2024-887',
-      disposalDate,
-      certificateFileUrl:
-        certificateFileUrl ||
-        `https://pharmachain.in/certificates/CERT-${new Date().getFullYear()}-WST-${Math.floor(1000 + Math.random() * 9000)}.pdf`,
-      certificateHash: computeHash(`${batchNumber}:${disposalDate}:${recordedDisposedQty}:${Date.now()}`),
-      disposalMethod,
-      destructionMethod: disposalMethod,
-      recordedDisposedQty,
-      destroyedQuantity: recordedDisposedQty,
-      issuedAt: new Date().toISOString(),
-    };
-
-    setDestructionCertificates((prev) => [newCert, ...prev]);
-
-    return {
-      success: true,
-      message: `Destruction Certificate #${newCert.id} recorded. Batch ${batchNumber} transitioned to permanently DESTROYED.`,
-      batch: res.batch,
-    };
   };
 
   // Manufacturer Action: Send Pickup Reminder to Retailer / Logistics
@@ -1065,6 +926,9 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   const resolveDispute = (disputeId: number, resolutionNotes: string) => {
+    api.resolveDispute(disputeId, resolutionNotes).then((updated) => {
+      setDisputes(prev => prev.map(d => d.id === disputeId ? updated as Dispute : d));
+    }).catch((error) => console.warn('Backend dispute resolution failed:', error));
     setDisputes((prev) =>
       prev.map((d) =>
         d.id === disputeId
@@ -1080,6 +944,9 @@ export const PharmaChainProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   const updateAlertStatus = (alertId: number, status: ReEntryAlert['alertStatus']) => {
+    api.updateAlert(alertId, status).then((updated) => {
+      setReEntryAlerts(prev => prev.map(a => a.id === alertId ? updated as ReEntryAlert : a));
+    }).catch((error) => console.warn('Backend alert update failed:', error));
     setReEntryAlerts((prev) =>
       prev.map((a) => (a.id === alertId ? { ...a, alertStatus: status } : a))
     );
